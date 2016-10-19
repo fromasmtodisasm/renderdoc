@@ -28,13 +28,15 @@
 
 class D3D9DebugManager;
 
-class WrappedD3DDevice9 : public IDirect3DDevice9, public IFrameCapturer
+class WrappedD3DDevice9 : public IDirect3DDevice9Ex, public IFrameCapturer
 {
 public:
-  WrappedD3DDevice9(IDirect3DDevice9 *device, HWND wnd);
+  WrappedD3DDevice9(IDirect3DDevice9 *device, HWND wnd, bool isExtended);
   ~WrappedD3DDevice9();
 
   void LazyInit();
+
+  void RenderOverlay(HWND hDestWindowOverride);
 
   void StartFrameCapture(void *dev, void *wnd);
   bool EndFrameCapture(void *dev, void *wnd);
@@ -78,6 +80,7 @@ public:
   virtual HRESULT __stdcall Reset(D3DPRESENT_PARAMETERS *pPresentationParameters);
   virtual HRESULT __stdcall Present(CONST RECT *pSourceRect, CONST RECT *pDestRect,
                                     HWND hDestWindow, CONST RGNDATA *pDirtyRegion);
+
   virtual HRESULT __stdcall GetBackBuffer(UINT iSwapChain, UINT iBackBuffer,
                                           D3DBACKBUFFER_TYPE Type, IDirect3DSurface9 **ppBackBuffer);
   virtual HRESULT __stdcall GetRasterStatus(UINT iSwapChain, D3DRASTER_STATUS *pRasterStatus);
@@ -244,10 +247,48 @@ public:
   virtual HRESULT __stdcall DeletePatch(UINT Handle);
   virtual HRESULT __stdcall CreateQuery(D3DQUERYTYPE Type, IDirect3DQuery9 **ppQuery);
 
+  /*** IDirect3DDevice9Ex methods ***/
+  virtual HRESULT __stdcall SetConvolutionMonoKernel(UINT width, UINT height, float *rows,
+                                                     float *columns);
+  virtual HRESULT __stdcall ComposeRects(IDirect3DSurface9 *pSrc, IDirect3DSurface9 *pDst,
+                                         IDirect3DVertexBuffer9 *pSrcRectDescs, UINT NumRects,
+                                         IDirect3DVertexBuffer9 *pDstRectDescs,
+                                         D3DCOMPOSERECTSOP Operation, int Xoffset, int Yoffset);
+  virtual HRESULT __stdcall PresentEx(CONST RECT *pSourceRect, CONST RECT *pDestRect,
+                                      HWND hDestWindowOverride, CONST RGNDATA *pDirtyRegion,
+                                      DWORD dwFlags);
+  virtual HRESULT __stdcall GetGPUThreadPriority(INT *pPriority);
+  virtual HRESULT __stdcall SetGPUThreadPriority(INT Priority);
+  virtual HRESULT __stdcall WaitForVBlank(UINT iSwapChain);
+  virtual HRESULT __stdcall CheckResourceResidency(IDirect3DResource9 **pResourceArray,
+                                                   UINT32 NumResources);
+  virtual HRESULT __stdcall SetMaximumFrameLatency(UINT MaxLatency);
+  virtual HRESULT __stdcall GetMaximumFrameLatency(UINT *pMaxLatency);
+  virtual HRESULT __stdcall CheckDeviceState(HWND hDestinationWindow);
+  virtual HRESULT __stdcall CreateRenderTargetEx(UINT Width, UINT Height, D3DFORMAT Format,
+                                                 D3DMULTISAMPLE_TYPE MultiSample,
+                                                 DWORD MultisampleQuality, BOOL Lockable,
+                                                 IDirect3DSurface9 **ppSurface,
+                                                 HANDLE *pSharedHandle, DWORD Usage);
+  virtual HRESULT __stdcall CreateOffscreenPlainSurfaceEx(UINT Width, UINT Height, D3DFORMAT Format,
+                                                          D3DPOOL Pool, IDirect3DSurface9 **ppSurface,
+                                                          HANDLE *pSharedHandle, DWORD Usage);
+  virtual HRESULT __stdcall CreateDepthStencilSurfaceEx(UINT Width, UINT Height, D3DFORMAT Format,
+                                                        D3DMULTISAMPLE_TYPE MultiSample,
+                                                        DWORD MultisampleQuality, BOOL Discard,
+                                                        IDirect3DSurface9 **ppSurface,
+                                                        HANDLE *pSharedHandle, DWORD Usage);
+  virtual HRESULT __stdcall ResetEx(D3DPRESENT_PARAMETERS *pPresentationParameters,
+                                    D3DDISPLAYMODEEX *pFullscreenDisplayMode);
+  virtual HRESULT __stdcall GetDisplayModeEx(UINT iSwapChain, D3DDISPLAYMODEEX *pMode,
+                                             D3DDISPLAYROTATION *pRotation);
+
 private:
   void CheckForDeath();
 
-  IDirect3DDevice9 *m_device;
+  IDirect3DDevice9 *m_Device;
+  bool m_IsExtended;
+
   D3D9DebugManager *m_DebugManager;
 
   HWND m_Wnd;
@@ -258,6 +299,8 @@ private:
   bool m_Alive;
 
   uint32_t m_FrameCounter;
+
+  LogState m_State;
 };
 
 ////////////////////////////////////////////////////////////////////////////
@@ -265,10 +308,13 @@ private:
 ////////////////////////////////////////////////////////////////////////////
 // WrappedD3D9
 
-class WrappedD3D9 : public IDirect3D9
+class WrappedD3D9 : public IDirect3D9Ex
 {
 public:
-  WrappedD3D9(IDirect3D9 *direct3D9) : m_direct3D(direct3D9) {}
+  WrappedD3D9(IDirect3D9 *direct3D9, bool isExtended)
+      : m_Direct3D(direct3D9), m_IsExtended(isExtended)
+  {
+  }
   /*** IUnknown methods ***/
   virtual HRESULT __stdcall QueryInterface(REFIID riid, void **ppvObj);
   virtual ULONG __stdcall AddRef();
@@ -306,6 +352,19 @@ public:
                                          D3DPRESENT_PARAMETERS *pPresentationParameters,
                                          IDirect3DDevice9 **ppReturnedDeviceInterface);
 
+  virtual UINT __stdcall GetAdapterModeCountEx(UINT Adapter, CONST D3DDISPLAYMODEFILTER *pFilter);
+  virtual HRESULT __stdcall EnumAdapterModesEx(UINT Adapter, CONST D3DDISPLAYMODEFILTER *pFilter,
+                                               UINT Mode, D3DDISPLAYMODEEX *pMode);
+  virtual HRESULT __stdcall GetAdapterDisplayModeEx(UINT Adapter, D3DDISPLAYMODEEX *pMode,
+                                                    D3DDISPLAYROTATION *pRotation);
+  virtual HRESULT __stdcall CreateDeviceEx(UINT Adapter, D3DDEVTYPE DeviceType, HWND hFocusWindow,
+                                           DWORD BehaviorFlags,
+                                           D3DPRESENT_PARAMETERS *pPresentationParameters,
+                                           D3DDISPLAYMODEEX *pFullscreenDisplayMode,
+                                           IDirect3DDevice9Ex **ppReturnedDeviceInterface);
+  virtual HRESULT __stdcall GetAdapterLUID(UINT Adapter, LUID *pLUID);
+
 private:
-  IDirect3D9 *m_direct3D;
+  IDirect3D9 *m_Direct3D;
+  bool m_IsExtended;
 };
