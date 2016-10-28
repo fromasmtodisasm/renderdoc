@@ -31,7 +31,7 @@ class D3D9DebugManager;
 class WrappedD3DDevice9 : public IDirect3DDevice9Ex, public IFrameCapturer
 {
 public:
-  WrappedD3DDevice9(IDirect3DDevice9 *device, HWND wnd, bool isExtended);
+  WrappedD3DDevice9(IDirect3DDevice9 *device, HWND wnd);
   ~WrappedD3DDevice9();
 
   void LazyInit();
@@ -287,7 +287,7 @@ private:
   void CheckForDeath();
 
   IDirect3DDevice9 *m_Device;
-  bool m_IsExtended;
+  IDirect3DDevice9Ex *m_DeviceEx;
 
   D3D9DebugManager *m_DebugManager;
 
@@ -311,9 +311,10 @@ private:
 class WrappedD3D9 : public IDirect3D9Ex
 {
 public:
-  WrappedD3D9(IDirect3D9 *direct3D9, bool isExtended)
-      : m_Direct3D(direct3D9), m_IsExtended(isExtended)
+  WrappedD3D9(IDirect3D9 *direct3D9) : m_Direct3D(direct3D9),
+	  m_Direct3DEx(NULL)
   {
+	  m_Direct3D->QueryInterface(__uuidof(IDirect3D9Ex), (void **)&m_Direct3DEx);
   }
   /*** IUnknown methods ***/
   virtual HRESULT __stdcall QueryInterface(REFIID riid, void **ppvObj);
@@ -366,5 +367,5 @@ public:
 
 private:
   IDirect3D9 *m_Direct3D;
-  bool m_IsExtended;
+  IDirect3D9Ex *m_Direct3DEx;
 };

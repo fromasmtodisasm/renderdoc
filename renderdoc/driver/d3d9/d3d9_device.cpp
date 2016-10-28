@@ -27,13 +27,15 @@
 #include "serialise/serialiser.h"
 #include "d3d9_debug.h"
 
-WrappedD3DDevice9::WrappedD3DDevice9(IDirect3DDevice9 *device, HWND wnd, bool isExtended)
+WrappedD3DDevice9::WrappedD3DDevice9(IDirect3DDevice9 *device, HWND wnd)
     : m_Device(device),
-      m_IsExtended(isExtended),
+		m_DeviceEx(NULL),
       m_RefCounter(device, false),
       m_SoftRefCounter(NULL, false),
       m_DebugManager(NULL)
 {
+	m_Device->QueryInterface(__uuidof(IDirect3DDevice9Ex), (void **)&m_DeviceEx);
+
   m_FrameCounter = 0;
 
   // refcounters implicitly construct with one reference, but we don't start with any soft
@@ -164,6 +166,38 @@ HRESULT WrappedD3DDevice9::QueryInterface(REFIID riid, void **ppvObject)
     *ppvObject = (IUnknown *)this;
     return S_OK;
   }
+  else if(riid == __uuidof(IDirect3DDevice9))
+  {
+	  HRESULT hr = m_Device->QueryInterface(riid, ppvObject);
+
+	  if(SUCCEEDED(hr))
+	  {
+		  AddRef();
+		  *ppvObject = this;
+		  return S_OK;
+	  }
+	  else
+	  {
+		  *ppvObject = NULL;
+		  return hr;
+	  }
+  }
+  else if(riid == __uuidof(IDirect3DDevice9Ex))
+  {
+	  HRESULT hr = m_Device->QueryInterface(riid, ppvObject);
+
+	  if(SUCCEEDED(hr))
+	  {
+		  AddRef();
+		  *ppvObject = this;
+		  return S_OK;
+	  }
+	  else
+	  {
+		  *ppvObject = NULL;
+		  return hr;
+	  }
+  }
   else
   {
     string guid = ToStr::Get(riid);
@@ -248,7 +282,9 @@ HRESULT __stdcall WrappedD3DDevice9::CreateAdditionalSwapChain(
 
 HRESULT __stdcall WrappedD3DDevice9::GetSwapChain(UINT iSwapChain, IDirect3DSwapChain9 **pSwapChain)
 {
-  return m_Device->GetSwapChain(iSwapChain, pSwapChain);
+	HRESULT res = m_Device->GetSwapChain(iSwapChain, pSwapChain);
+
+  return 
 }
 
 UINT __stdcall WrappedD3DDevice9::GetNumberOfSwapChains()
@@ -876,8 +912,8 @@ HRESULT __stdcall WrappedD3DDevice9::CreateQuery(D3DQUERYTYPE Type, IDirect3DQue
 HRESULT WrappedD3DDevice9::SetConvolutionMonoKernel(UINT width, UINT height, float *rows,
                                                     float *columns)
 {
-  RDCASSERT(m_IsExtended);
-  return ((IDirect3DDevice9Ex *)m_Device)->SetConvolutionMonoKernel(width, height, rows, columns);
+  RDCASSERT(m_DeviceEx != NULL);
+  return m_DeviceEx->SetConvolutionMonoKernel(width, height, rows, columns);
 }
 
 HRESULT WrappedD3DDevice9::ComposeRects(IDirect3DSurface9 *pSrc, IDirect3DSurface9 *pDst,
@@ -885,62 +921,61 @@ HRESULT WrappedD3DDevice9::ComposeRects(IDirect3DSurface9 *pSrc, IDirect3DSurfac
                                         IDirect3DVertexBuffer9 *pDstRectDescs,
                                         D3DCOMPOSERECTSOP Operation, int Xoffset, int Yoffset)
 {
-  RDCASSERT(m_IsExtended);
-  return ((IDirect3DDevice9Ex *)m_Device)
-      ->ComposeRects(pSrc, pDst, pSrcRectDescs, NumRects, pDstRectDescs, Operation, Xoffset, Yoffset);
+  RDCASSERT(m_DeviceEx != NULL);
+  return m_DeviceEx->ComposeRects(pSrc, pDst, pSrcRectDescs, NumRects, pDstRectDescs, Operation,
+                                  Xoffset, Yoffset);
 }
 
 HRESULT WrappedD3DDevice9::PresentEx(CONST RECT *pSourceRect, CONST RECT *pDestRect,
                                      HWND hDestWindowOverride, CONST RGNDATA *pDirtyRegion,
                                      DWORD dwFlags)
 {
-  RDCASSERT(m_IsExtended);
+  RDCASSERT(m_DeviceEx != NULL);
   RenderOverlay(hDestWindowOverride);
-  return ((IDirect3DDevice9Ex *)m_Device)
-      ->PresentEx(pSourceRect, pDestRect, hDestWindowOverride, pDirtyRegion, dwFlags);
+  return m_DeviceEx->PresentEx(pSourceRect, pDestRect, hDestWindowOverride, pDirtyRegion, dwFlags);
 }
 
 HRESULT WrappedD3DDevice9::GetGPUThreadPriority(INT *pPriority)
 {
-  RDCASSERT(m_IsExtended);
-  return ((IDirect3DDevice9Ex *)m_Device)->GetGPUThreadPriority(pPriority);
+  RDCASSERT(m_DeviceEx != NULL);
+  return m_DeviceEx->GetGPUThreadPriority(pPriority);
 }
 
 HRESULT WrappedD3DDevice9::SetGPUThreadPriority(INT Priority)
 {
-  RDCASSERT(m_IsExtended);
-  return ((IDirect3DDevice9Ex *)m_Device)->SetGPUThreadPriority(Priority);
+  RDCASSERT(m_DeviceEx != NULL);
+  return m_DeviceEx->SetGPUThreadPriority(Priority);
 }
 
 HRESULT WrappedD3DDevice9::WaitForVBlank(UINT iSwapChain)
 {
-  RDCASSERT(m_IsExtended);
-  return ((IDirect3DDevice9Ex *)m_Device)->WaitForVBlank(iSwapChain);
+  RDCASSERT(m_DeviceEx != NULL);
+  return m_DeviceEx->WaitForVBlank(iSwapChain);
 }
 
 HRESULT WrappedD3DDevice9::CheckResourceResidency(IDirect3DResource9 **pResourceArray,
                                                   UINT32 NumResources)
 {
-  RDCASSERT(m_IsExtended);
-  return ((IDirect3DDevice9Ex *)m_Device)->CheckResourceResidency(pResourceArray, NumResources);
+  RDCASSERT(m_DeviceEx != NULL);
+  return m_DeviceEx->CheckResourceResidency(pResourceArray, NumResources);
 }
 
 HRESULT WrappedD3DDevice9::SetMaximumFrameLatency(UINT MaxLatency)
 {
-  RDCASSERT(m_IsExtended);
-  return ((IDirect3DDevice9Ex *)m_Device)->SetMaximumFrameLatency(MaxLatency);
+  RDCASSERT(m_DeviceEx != NULL);
+  return m_DeviceEx->SetMaximumFrameLatency(MaxLatency);
 }
 
 HRESULT WrappedD3DDevice9::GetMaximumFrameLatency(UINT *pMaxLatency)
 {
-  RDCASSERT(m_IsExtended);
-  return ((IDirect3DDevice9Ex *)m_Device)->GetMaximumFrameLatency(pMaxLatency);
+  RDCASSERT(m_DeviceEx != NULL);
+  return m_DeviceEx->GetMaximumFrameLatency(pMaxLatency);
 }
 
 HRESULT WrappedD3DDevice9::CheckDeviceState(HWND hDestinationWindow)
 {
-  RDCASSERT(m_IsExtended);
-  return ((IDirect3DDevice9Ex *)m_Device)->CheckDeviceState(hDestinationWindow);
+  RDCASSERT(m_DeviceEx != NULL);
+  return m_DeviceEx->CheckDeviceState(hDestinationWindow);
 }
 
 HRESULT WrappedD3DDevice9::CreateRenderTargetEx(UINT Width, UINT Height, D3DFORMAT Format,
@@ -949,19 +984,18 @@ HRESULT WrappedD3DDevice9::CreateRenderTargetEx(UINT Width, UINT Height, D3DFORM
                                                 IDirect3DSurface9 **ppSurface,
                                                 HANDLE *pSharedHandle, DWORD Usage)
 {
-  RDCASSERT(m_IsExtended);
-  return ((IDirect3DDevice9Ex *)m_Device)
-      ->CreateRenderTargetEx(Width, Height, Format, MultiSample, MultisampleQuality, Lockable,
-                             ppSurface, pSharedHandle, Usage);
+  RDCASSERT(m_DeviceEx != NULL);
+  return m_DeviceEx->CreateRenderTargetEx(Width, Height, Format, MultiSample, MultisampleQuality,
+                                          Lockable, ppSurface, pSharedHandle, Usage);
 }
 
 HRESULT WrappedD3DDevice9::CreateOffscreenPlainSurfaceEx(UINT Width, UINT Height, D3DFORMAT Format,
                                                          D3DPOOL Pool, IDirect3DSurface9 **ppSurface,
                                                          HANDLE *pSharedHandle, DWORD Usage)
 {
-  RDCASSERT(m_IsExtended);
-  return ((IDirect3DDevice9Ex *)m_Device)
-      ->CreateOffscreenPlainSurfaceEx(Width, Height, Format, Pool, ppSurface, pSharedHandle, Usage);
+  RDCASSERT(m_DeviceEx != NULL);
+  return m_DeviceEx->CreateOffscreenPlainSurfaceEx(Width, Height, Format, Pool, ppSurface,
+                                                   pSharedHandle, Usage);
 }
 
 HRESULT WrappedD3DDevice9::CreateDepthStencilSurfaceEx(UINT Width, UINT Height, D3DFORMAT Format,
@@ -970,30 +1004,68 @@ HRESULT WrappedD3DDevice9::CreateDepthStencilSurfaceEx(UINT Width, UINT Height, 
                                                        IDirect3DSurface9 **ppSurface,
                                                        HANDLE *pSharedHandle, DWORD Usage)
 {
-  RDCASSERT(m_IsExtended);
-  return ((IDirect3DDevice9Ex *)m_Device)
-      ->CreateDepthStencilSurfaceEx(Width, Height, Format, MultiSample, MultisampleQuality, Discard,
-                                    ppSurface, pSharedHandle, Usage);
+  RDCASSERT(m_DeviceEx != NULL);
+  return m_DeviceEx->CreateDepthStencilSurfaceEx(Width, Height, Format, MultiSample,
+                                                 MultisampleQuality, Discard, ppSurface,
+                                                 pSharedHandle, Usage);
 }
 
 HRESULT WrappedD3DDevice9::ResetEx(D3DPRESENT_PARAMETERS *pPresentationParameters,
                                    D3DDISPLAYMODEEX *pFullscreenDisplayMode)
 {
-  RDCASSERT(m_IsExtended);
-  return ((IDirect3DDevice9Ex *)m_Device)->ResetEx(pPresentationParameters, pFullscreenDisplayMode);
+  RDCASSERT(m_DeviceEx != NULL);
+  return m_DeviceEx->ResetEx(pPresentationParameters, pFullscreenDisplayMode);
 }
 
 HRESULT WrappedD3DDevice9::GetDisplayModeEx(UINT iSwapChain, D3DDISPLAYMODEEX *pMode,
                                             D3DDISPLAYROTATION *pRotation)
 {
-  RDCASSERT(m_IsExtended);
-  return ((IDirect3DDevice9Ex *)m_Device)->GetDisplayModeEx(iSwapChain, pMode, pRotation);
+  RDCASSERT(m_DeviceEx != NULL);
+  return m_DeviceEx->GetDisplayModeEx(iSwapChain, pMode, pRotation);
 }
 
 /* Wrapped D3D */
 
 HRESULT __stdcall WrappedD3D9::QueryInterface(REFIID riid, void **ppvObj)
 {
+	if(riid == __uuidof(IDirect3D9))
+	{
+		HRESULT hr = m_Direct3D->QueryInterface(riid, ppvObj);
+
+		if(SUCCEEDED(hr))
+		{
+			AddRef();
+			*ppvObj = this;
+			return S_OK;
+		}
+		else
+		{
+			*ppvObj = NULL;
+			return hr;
+		}
+	}
+	else if(riid == __uuidof(IDirect3D9Ex))
+	{
+		HRESULT hr = m_Direct3D->QueryInterface(riid, ppvObj);
+
+		if(SUCCEEDED(hr))
+		{
+			AddRef();
+			*ppvObj = this;
+			return S_OK;
+		}
+		else
+		{
+			*ppvObj = NULL;
+			return hr;
+		}
+	}
+	else
+	{
+		string guid = ToStr::Get(riid);
+		RDCWARN("Querying IDirect3D9 for interface: %s", guid.c_str());
+	}
+
   return m_Direct3D->QueryInterface(riid, ppvObj);
 }
 
@@ -1116,7 +1188,7 @@ HRESULT __stdcall WrappedD3D9::CreateDevice(UINT Adapter, D3DDEVTYPE DeviceType,
     if(!wnd)
       RDCWARN("Couldn't find valid non-NULL window at CreateDevice time");
 
-    WrappedD3DDevice9 *wrappedDevice = new WrappedD3DDevice9(device, wnd, false);
+    WrappedD3DDevice9 *wrappedDevice = new WrappedD3DDevice9(device, wnd);
     wrappedDevice->LazyInit();    // TODO this can be moved later probably
     *ppReturnedDeviceInterface = wrappedDevice;
   }
@@ -1129,22 +1201,22 @@ HRESULT __stdcall WrappedD3D9::CreateDevice(UINT Adapter, D3DDEVTYPE DeviceType,
 
 UINT __stdcall WrappedD3D9::GetAdapterModeCountEx(UINT Adapter, CONST D3DDISPLAYMODEFILTER *pFilter)
 {
-  RDCASSERT(m_IsExtended);
-  return ((IDirect3D9Ex *)m_Direct3D)->GetAdapterModeCountEx(Adapter, pFilter);
+  RDCASSERT(m_Direct3DEx != NULL);
+  return m_Direct3DEx->GetAdapterModeCountEx(Adapter, pFilter);
 }
 
 HRESULT __stdcall WrappedD3D9::EnumAdapterModesEx(UINT Adapter, CONST D3DDISPLAYMODEFILTER *pFilter,
                                                   UINT Mode, D3DDISPLAYMODEEX *pMode)
 {
-  RDCASSERT(m_IsExtended);
-  return ((IDirect3D9Ex *)m_Direct3D)->EnumAdapterModesEx(Adapter, pFilter, Mode, pMode);
+  RDCASSERT(m_Direct3DEx != NULL);
+  return m_Direct3DEx->EnumAdapterModesEx(Adapter, pFilter, Mode, pMode);
 }
 
 HRESULT __stdcall WrappedD3D9::GetAdapterDisplayModeEx(UINT Adapter, D3DDISPLAYMODEEX *pMode,
                                                        D3DDISPLAYROTATION *pRotation)
 {
-  RDCASSERT(m_IsExtended);
-  return ((IDirect3D9Ex *)m_Direct3D)->GetAdapterDisplayModeEx(Adapter, pMode, pRotation);
+  RDCASSERT(m_Direct3DEx != NULL);
+  return m_Direct3DEx->GetAdapterDisplayModeEx(Adapter, pMode, pRotation);
 }
 
 HRESULT __stdcall WrappedD3D9::CreateDeviceEx(UINT Adapter, D3DDEVTYPE DeviceType,
@@ -1153,13 +1225,13 @@ HRESULT __stdcall WrappedD3D9::CreateDeviceEx(UINT Adapter, D3DDEVTYPE DeviceTyp
                                               D3DDISPLAYMODEEX *pFullscreenDisplayMode,
                                               IDirect3DDevice9Ex **ppReturnedDeviceInterface)
 {
-  RDCASSERT(m_IsExtended);
+  RDCASSERT(m_Direct3DEx != NULL);
 
   IDirect3DDevice9Ex *device = NULL;
 
-  HRESULT res = ((IDirect3D9Ex *)m_Direct3D)
-                    ->CreateDeviceEx(Adapter, DeviceType, hFocusWindow, BehaviorFlags,
-                                     pPresentationParameters, pFullscreenDisplayMode, &device);
+  HRESULT res =
+      m_Direct3DEx->CreateDeviceEx(Adapter, DeviceType, hFocusWindow, BehaviorFlags,
+                                   pPresentationParameters, pFullscreenDisplayMode, &device);
   if(res == S_OK)
   {
     RDCLOG("App creating D3D9 DeviceEx");
@@ -1171,7 +1243,7 @@ HRESULT __stdcall WrappedD3D9::CreateDeviceEx(UINT Adapter, D3DDEVTYPE DeviceTyp
     if(!wnd)
       RDCWARN("Couldn't find valid non-NULL window at CreateDevice time");
 
-    WrappedD3DDevice9 *wrappedDevice = new WrappedD3DDevice9(device, wnd, true);
+    WrappedD3DDevice9 *wrappedDevice = new WrappedD3DDevice9(device, wnd);
     wrappedDevice->LazyInit();    // TODO this can be moved later probably
     *ppReturnedDeviceInterface = wrappedDevice;
   }
@@ -1184,6 +1256,6 @@ HRESULT __stdcall WrappedD3D9::CreateDeviceEx(UINT Adapter, D3DDEVTYPE DeviceTyp
 
 HRESULT __stdcall WrappedD3D9::GetAdapterLUID(UINT Adapter, LUID *pLUID)
 {
-  RDCASSERT(m_IsExtended);
-  return ((IDirect3D9Ex *)m_Direct3D)->GetAdapterLUID(Adapter, pLUID);
+  RDCASSERT(m_Direct3DEx != NULL);
+  return m_Direct3DEx->GetAdapterLUID(Adapter, pLUID);
 }

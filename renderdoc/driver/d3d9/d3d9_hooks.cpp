@@ -151,7 +151,7 @@ private:
     if(result == S_OK && realD3D != NULL)
     //*/
     {
-      return new WrappedD3D9(realD3D, false);
+      return new WrappedD3D9(realD3D);
     }
     else
     {
@@ -168,7 +168,7 @@ private:
 
     if(result == S_OK)
     {
-      *ppD3D = new WrappedD3D9(realD3D, true);
+      *ppD3D = new WrappedD3D9(realD3D);
     }
     else
     {
