@@ -26,6 +26,7 @@
 #include "core/core.h"
 #include "serialise/serialiser.h"
 #include "d3d9_debug.h"
+#include "d3d9_swapchain.h"
 
 WrappedD3DDevice9::WrappedD3DDevice9(IDirect3DDevice9 *device, HWND wnd)
     : m_Device(device),
@@ -88,6 +89,7 @@ WrappedD3DDevice9::~WrappedD3DDevice9()
   SAFE_DELETE(m_DebugManager);
 
   SAFE_RELEASE(m_Device);
+  SAFE_RELEASE(m_DeviceEx);
 }
 
 void WrappedD3DDevice9::RenderOverlay(HWND hDestWindowOverride)
@@ -145,6 +147,9 @@ void WrappedD3DDevice9::RenderOverlay(HWND hDestWindowOverride)
 
       stateBlockRes = stateBlock->Apply();
       res |= m_Device->EndScene();
+
+	  backBuffer->Release();
+	  swapChain->Release();
     }
   }
 
@@ -277,14 +282,34 @@ BOOL __stdcall WrappedD3DDevice9::ShowCursor(BOOL bShow)
 HRESULT __stdcall WrappedD3DDevice9::CreateAdditionalSwapChain(
     D3DPRESENT_PARAMETERS *pPresentationParameters, IDirect3DSwapChain9 **pSwapChain)
 {
-  return m_Device->CreateAdditionalSwapChain(pPresentationParameters, pSwapChain);
+	IDirect3DSwapChain9* swapChain;
+	HRESULT res = m_Device->CreateAdditionalSwapChain(pPresentationParameters, &swapChain);
+
+	//TODO figure out reference counting
+
+	if (res == S_OK)
+	{
+		WrappedD3DSwapChain9* wrappedSwapchain = new WrappedD3DSwapChain9(swapChain, this);
+		*pSwapChain = wrappedSwapchain;
+	}
+
+	return res;
 }
 
 HRESULT __stdcall WrappedD3DDevice9::GetSwapChain(UINT iSwapChain, IDirect3DSwapChain9 **pSwapChain)
 {
-	HRESULT res = m_Device->GetSwapChain(iSwapChain, pSwapChain);
+	IDirect3DSwapChain9* swapChain;
+	HRESULT res = m_Device->GetSwapChain(iSwapChain, &swapChain);
 
-  return 
+	//TODO figure out reference counting
+
+	if (res == S_OK)
+	{
+		WrappedD3DSwapChain9* wrappedSwapchain = new WrappedD3DSwapChain9(swapChain, this);
+		*pSwapChain = wrappedSwapchain;
+	}
+
+	return res;
 }
 
 UINT __stdcall WrappedD3DDevice9::GetNumberOfSwapChains()
