@@ -29,29 +29,32 @@
 class WrappedD3DSwapChain9 : public IDirect3DSwapChain9Ex
 {
 public:
-	WrappedD3DSwapChain9(IDirect3DSwapChain9* swapChain, WrappedD3DDevice9* device);
+  WrappedD3DSwapChain9(IDirect3DSwapChain9 *swapChain, WrappedD3DDevice9 *device);
 
-	/*** IUnknown methods ***/
-	virtual HRESULT __stdcall QueryInterface(REFIID riid, void** ppvObj);
-	virtual ULONG __stdcall AddRef();
-	virtual ULONG __stdcall Release();
+  /*** IUnknown methods ***/
+  virtual HRESULT __stdcall QueryInterface(REFIID riid, void **ppvObj);
+  virtual ULONG __stdcall AddRef();
+  virtual ULONG __stdcall Release();
 
-	/*** IDirect3DSwapChain9 methods ***/
-	virtual HRESULT __stdcall Present(CONST RECT* pSourceRect, CONST RECT* pDestRect, HWND hDestWindowOverride, CONST RGNDATA* pDirtyRegion, DWORD dwFlags);
-	virtual HRESULT __stdcall GetFrontBufferData(IDirect3DSurface9* pDestSurface);
-	virtual HRESULT __stdcall GetBackBuffer(UINT iBackBuffer, D3DBACKBUFFER_TYPE Type, IDirect3DSurface9** ppBackBuffer);
-	virtual HRESULT __stdcall GetRasterStatus(D3DRASTER_STATUS* pRasterStatus);
-	virtual HRESULT __stdcall GetDisplayMode(D3DDISPLAYMODE* pMode);
-	virtual HRESULT __stdcall GetDevice(IDirect3DDevice9** ppDevice);
-	virtual HRESULT __stdcall GetPresentParameters(D3DPRESENT_PARAMETERS* pPresentationParameters);
+  /*** IDirect3DSwapChain9 methods ***/
+  virtual HRESULT __stdcall Present(CONST RECT *pSourceRect, CONST RECT *pDestRect,
+                                    HWND hDestWindowOverride, CONST RGNDATA *pDirtyRegion,
+                                    DWORD dwFlags);
+  virtual HRESULT __stdcall GetFrontBufferData(IDirect3DSurface9 *pDestSurface);
+  virtual HRESULT __stdcall GetBackBuffer(UINT iBackBuffer, D3DBACKBUFFER_TYPE Type,
+                                          IDirect3DSurface9 **ppBackBuffer);
+  virtual HRESULT __stdcall GetRasterStatus(D3DRASTER_STATUS *pRasterStatus);
+  virtual HRESULT __stdcall GetDisplayMode(D3DDISPLAYMODE *pMode);
+  virtual HRESULT __stdcall GetDevice(IDirect3DDevice9 **ppDevice);
+  virtual HRESULT __stdcall GetPresentParameters(D3DPRESENT_PARAMETERS *pPresentationParameters);
 
-	/*** IDirect3DSwapChain9Ex methods ***/
-	virtual HRESULT __stdcall GetLastPresentCount(UINT* pLastPresentCount);
-	virtual HRESULT __stdcall GetPresentStats(D3DPRESENTSTATS* pPresentationStatistics);
-	virtual HRESULT __stdcall GetDisplayModeEx(D3DDISPLAYMODEEX* pMode, D3DDISPLAYROTATION* pRotation);
+  /*** IDirect3DSwapChain9Ex methods ***/
+  virtual HRESULT __stdcall GetLastPresentCount(UINT *pLastPresentCount);
+  virtual HRESULT __stdcall GetPresentStats(D3DPRESENTSTATS *pPresentationStatistics);
+  virtual HRESULT __stdcall GetDisplayModeEx(D3DDISPLAYMODEEX *pMode, D3DDISPLAYROTATION *pRotation);
 
 private:
-	IDirect3DSwapChain9* m_SwapChain;
-	IDirect3DSwapChain9Ex* m_SwapChainEx;
-	WrappedD3DDevice9* m_Device;
+  IDirect3DSwapChain9 *m_SwapChain;
+  IDirect3DSwapChain9Ex *m_SwapChainEx;
+  WrappedD3DDevice9 *m_Device;
 };

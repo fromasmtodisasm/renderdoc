@@ -30,12 +30,16 @@
 
 WrappedD3DDevice9::WrappedD3DDevice9(IDirect3DDevice9 *device, HWND wnd)
     : m_Device(device),
-		m_DeviceEx(NULL),
+      m_DeviceEx(NULL),
       m_RefCounter(device, false),
       m_SoftRefCounter(NULL, false),
       m_DebugManager(NULL)
 {
-	m_Device->QueryInterface(__uuidof(IDirect3DDevice9Ex), (void **)&m_DeviceEx);
+  m_Device->QueryInterface(__uuidof(IDirect3DDevice9Ex), (void **)&m_DeviceEx);
+
+  m_Device->AddRef();
+  ULONG refcountAfter = m_Device->Release();
+  RDCASSERT(refcountAfter == 2);
 
   m_FrameCounter = 0;
 
@@ -88,6 +92,10 @@ WrappedD3DDevice9::~WrappedD3DDevice9()
 
   SAFE_DELETE(m_DebugManager);
 
+  m_Device->AddRef();
+  ULONG refcountBefore = m_Device->Release();
+  RDCASSERT(refcountBefore == 2);
+
   SAFE_RELEASE(m_Device);
   SAFE_RELEASE(m_DeviceEx);
 }
@@ -96,6 +104,9 @@ void WrappedD3DDevice9::RenderOverlay(HWND hDestWindowOverride)
 {
   // if(m_State == WRITING_IDLE)
   RenderDoc::Inst().Tick();
+
+  m_Device->AddRef();
+  ULONG refcountBefore = m_Device->Release();
 
   IDirect3DSwapChain9 *swapChain;
   m_Device->GetSwapChain(0, &swapChain);
@@ -146,10 +157,11 @@ void WrappedD3DDevice9::RenderOverlay(HWND hDestWindowOverride)
         GetDebugManager()->RenderText(0.0f, 0.0f, overlayText.c_str());
 
       stateBlockRes = stateBlock->Apply();
+      stateBlock->Release();
       res |= m_Device->EndScene();
 
-	  backBuffer->Release();
-	  swapChain->Release();
+      backBuffer->Release();
+      swapChain->Release();
     }
   }
 
@@ -157,6 +169,10 @@ void WrappedD3DDevice9::RenderOverlay(HWND hDestWindowOverride)
   {
     RenderDoc::Inst().SetCurrentDriver(RDC_D3D9);
   }
+
+  m_Device->AddRef();
+  ULONG refcountAfter = m_Device->Release();
+  RDCASSERT(refcountAfter == refcountBefore);
 }
 
 HRESULT WrappedD3DDevice9::QueryInterface(REFIID riid, void **ppvObject)
@@ -173,35 +189,37 @@ HRESULT WrappedD3DDevice9::QueryInterface(REFIID riid, void **ppvObject)
   }
   else if(riid == __uuidof(IDirect3DDevice9))
   {
-	  HRESULT hr = m_Device->QueryInterface(riid, ppvObject);
+    HRESULT hr = m_Device->QueryInterface(riid, ppvObject);
 
-	  if(SUCCEEDED(hr))
-	  {
-		  AddRef();
-		  *ppvObject = this;
-		  return S_OK;
-	  }
-	  else
-	  {
-		  *ppvObject = NULL;
-		  return hr;
-	  }
+    if(SUCCEEDED(hr))
+    {
+      AddRef();
+      m_Device->Release();    // transfer the refcount to the wrapper
+      *ppvObject = this;
+      return S_OK;
+    }
+    else
+    {
+      *ppvObject = NULL;
+      return hr;
+    }
   }
   else if(riid == __uuidof(IDirect3DDevice9Ex))
   {
-	  HRESULT hr = m_Device->QueryInterface(riid, ppvObject);
+    HRESULT hr = m_Device->QueryInterface(riid, ppvObject);
 
-	  if(SUCCEEDED(hr))
-	  {
-		  AddRef();
-		  *ppvObject = this;
-		  return S_OK;
-	  }
-	  else
-	  {
-		  *ppvObject = NULL;
-		  return hr;
-	  }
+    if(SUCCEEDED(hr))
+    {
+      AddRef();
+      m_Device->Release();    // transfer the refcount to the wrapper
+      *ppvObject = this;
+      return S_OK;
+    }
+    else
+    {
+      *ppvObject = NULL;
+      return hr;
+    }
   }
   else
   {
@@ -282,34 +300,34 @@ BOOL __stdcall WrappedD3DDevice9::ShowCursor(BOOL bShow)
 HRESULT __stdcall WrappedD3DDevice9::CreateAdditionalSwapChain(
     D3DPRESENT_PARAMETERS *pPresentationParameters, IDirect3DSwapChain9 **pSwapChain)
 {
-	IDirect3DSwapChain9* swapChain;
-	HRESULT res = m_Device->CreateAdditionalSwapChain(pPresentationParameters, &swapChain);
+  IDirect3DSwapChain9 *swapChain;
+  HRESULT res = m_Device->CreateAdditionalSwapChain(pPresentationParameters, &swapChain);
 
-	//TODO figure out reference counting
+  // TODO figure out reference counting
 
-	if (res == S_OK)
-	{
-		WrappedD3DSwapChain9* wrappedSwapchain = new WrappedD3DSwapChain9(swapChain, this);
-		*pSwapChain = wrappedSwapchain;
-	}
+  if(res == S_OK)
+  {
+    WrappedD3DSwapChain9 *wrappedSwapchain = new WrappedD3DSwapChain9(swapChain, this);
+    *pSwapChain = wrappedSwapchain;
+  }
 
-	return res;
+  return res;
 }
 
 HRESULT __stdcall WrappedD3DDevice9::GetSwapChain(UINT iSwapChain, IDirect3DSwapChain9 **pSwapChain)
 {
-	IDirect3DSwapChain9* swapChain;
-	HRESULT res = m_Device->GetSwapChain(iSwapChain, &swapChain);
+  IDirect3DSwapChain9 *swapChain;
+  HRESULT res = m_Device->GetSwapChain(iSwapChain, &swapChain);
 
-	//TODO figure out reference counting
+  // TODO figure out reference counting
 
-	if (res == S_OK)
-	{
-		WrappedD3DSwapChain9* wrappedSwapchain = new WrappedD3DSwapChain9(swapChain, this);
-		*pSwapChain = wrappedSwapchain;
-	}
+  if(res == S_OK)
+  {
+    WrappedD3DSwapChain9 *wrappedSwapchain = new WrappedD3DSwapChain9(swapChain, this);
+    *pSwapChain = wrappedSwapchain;
+  }
 
-	return res;
+  return res;
 }
 
 UINT __stdcall WrappedD3DDevice9::GetNumberOfSwapChains()
@@ -1053,43 +1071,41 @@ HRESULT WrappedD3DDevice9::GetDisplayModeEx(UINT iSwapChain, D3DDISPLAYMODEEX *p
 
 HRESULT __stdcall WrappedD3D9::QueryInterface(REFIID riid, void **ppvObj)
 {
-	if(riid == __uuidof(IDirect3D9))
-	{
-		HRESULT hr = m_Direct3D->QueryInterface(riid, ppvObj);
+  if(riid == __uuidof(IDirect3D9))
+  {
+    HRESULT hr = m_Direct3D->QueryInterface(riid, ppvObj);
 
-		if(SUCCEEDED(hr))
-		{
-			AddRef();
-			*ppvObj = this;
-			return S_OK;
-		}
-		else
-		{
-			*ppvObj = NULL;
-			return hr;
-		}
-	}
-	else if(riid == __uuidof(IDirect3D9Ex))
-	{
-		HRESULT hr = m_Direct3D->QueryInterface(riid, ppvObj);
+    if(SUCCEEDED(hr))
+    {
+      *ppvObj = this;
+      return S_OK;
+    }
+    else
+    {
+      *ppvObj = NULL;
+      return hr;
+    }
+  }
+  else if(riid == __uuidof(IDirect3D9Ex))
+  {
+    HRESULT hr = m_Direct3D->QueryInterface(riid, ppvObj);
 
-		if(SUCCEEDED(hr))
-		{
-			AddRef();
-			*ppvObj = this;
-			return S_OK;
-		}
-		else
-		{
-			*ppvObj = NULL;
-			return hr;
-		}
-	}
-	else
-	{
-		string guid = ToStr::Get(riid);
-		RDCWARN("Querying IDirect3D9 for interface: %s", guid.c_str());
-	}
+    if(SUCCEEDED(hr))
+    {
+      *ppvObj = this;
+      return S_OK;
+    }
+    else
+    {
+      *ppvObj = NULL;
+      return hr;
+    }
+  }
+  else
+  {
+    string guid = ToStr::Get(riid);
+    RDCWARN("Querying IDirect3D9 for interface: %s", guid.c_str());
+  }
 
   return m_Direct3D->QueryInterface(riid, ppvObj);
 }
@@ -1098,17 +1114,18 @@ ULONG __stdcall WrappedD3D9::AddRef()
 {
   ULONG refCount;
   refCount = m_Direct3D->AddRef();
-  return refCount;
+  return refCount - 1;
 }
 
 ULONG __stdcall WrappedD3D9::Release()
 {
   ULONG refCount = m_Direct3D->Release();
-  if(refCount == 0)
+  if(refCount == 1)
   {
+    m_Direct3D->Release();
     delete this;
   }
-  return refCount;
+  return refCount - 1;
 }
 
 HRESULT __stdcall WrappedD3D9::RegisterSoftwareDevice(void *pInitializeFunction)
@@ -1118,7 +1135,8 @@ HRESULT __stdcall WrappedD3D9::RegisterSoftwareDevice(void *pInitializeFunction)
 
 UINT __stdcall WrappedD3D9::GetAdapterCount()
 {
-  return m_Direct3D->GetAdapterCount();
+  UINT count = m_Direct3D->GetAdapterCount();
+  return count;
 }
 
 HRESULT __stdcall WrappedD3D9::GetAdapterIdentifier(UINT Adapter, DWORD Flags,
@@ -1221,6 +1239,12 @@ HRESULT __stdcall WrappedD3D9::CreateDevice(UINT Adapter, D3DDEVTYPE DeviceType,
   {
     *ppReturnedDeviceInterface = NULL;
   }
+
+  m_Direct3D->AddRef();
+  ULONG refcountAfter = m_Direct3D->Release();
+
+  RDCASSERT(refcountAfter == 3);
+
   return res;
 }
 
@@ -1276,6 +1300,12 @@ HRESULT __stdcall WrappedD3D9::CreateDeviceEx(UINT Adapter, D3DDEVTYPE DeviceTyp
   {
     *ppReturnedDeviceInterface = NULL;
   }
+
+  m_Direct3D->AddRef();
+  ULONG refcountAfter = m_Direct3D->Release();
+
+  RDCASSERT(refcountAfter == 4);
+
   return res;
 }
 

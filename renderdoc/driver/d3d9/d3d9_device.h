@@ -311,10 +311,14 @@ private:
 class WrappedD3D9 : public IDirect3D9Ex
 {
 public:
-  WrappedD3D9(IDirect3D9 *direct3D9) : m_Direct3D(direct3D9),
-	  m_Direct3DEx(NULL)
+  WrappedD3D9(IDirect3D9 *direct3D9) : m_Direct3D(direct3D9), m_Direct3DEx(NULL)
   {
-	  m_Direct3D->QueryInterface(__uuidof(IDirect3D9Ex), (void **)&m_Direct3DEx);
+    m_Direct3D->QueryInterface(__uuidof(IDirect3D9Ex), (void **)&m_Direct3DEx);
+
+    m_Direct3D->AddRef();
+    ULONG refcountAfter = m_Direct3D->Release();
+
+    RDCASSERT(refcountAfter == 2);
   }
   /*** IUnknown methods ***/
   virtual HRESULT __stdcall QueryInterface(REFIID riid, void **ppvObj);
