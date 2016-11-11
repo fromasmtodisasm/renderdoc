@@ -28,18 +28,16 @@
 #include "d3d9_debug.h"
 #include "d3d9_swapchain.h"
 
-WrappedD3DDevice9::WrappedD3DDevice9(IDirect3DDevice9 *device, HWND wnd)
+WrappedD3DDevice9::WrappedD3DDevice9(IDirect3DDevice9 *device, WrappedD3D9 *wrappedD3D, HWND wnd)
     : m_Device(device),
       m_DeviceEx(NULL),
       m_RefCounter(device, false),
       m_SoftRefCounter(NULL, false),
-      m_DebugManager(NULL)
+      m_DebugManager(NULL),
+      m_D3D(wrappedD3D)
 {
+  m_D3D->AddRef();
   m_Device->QueryInterface(__uuidof(IDirect3DDevice9Ex), (void **)&m_DeviceEx);
-
-  m_Device->AddRef();
-  ULONG refcountAfter = m_Device->Release();
-  RDCASSERT(refcountAfter == 2);
 
   m_FrameCounter = 0;
 
@@ -96,6 +94,7 @@ WrappedD3DDevice9::~WrappedD3DDevice9()
   ULONG refcountBefore = m_Device->Release();
   RDCASSERT(refcountBefore == 2);
 
+  SAFE_RELEASE(m_D3D);
   SAFE_RELEASE(m_Device);
   SAFE_RELEASE(m_DeviceEx);
 }
@@ -263,7 +262,25 @@ HRESULT __stdcall WrappedD3DDevice9::EvictManagedResources()
 
 HRESULT __stdcall WrappedD3DDevice9::GetDirect3D(IDirect3D9 **ppD3D9)
 {
-  return m_Device->GetDirect3D(ppD3D9);
+  // make sure the underlying object is actually there
+  IDirect3D9 *direct3D = nullptr;
+  HRESULT res = m_Device->GetDirect3D(&direct3D);
+  if(direct3D != nullptr)
+  {
+    direct3D->Release();
+  }
+
+  if(res == S_OK)
+  {
+    m_D3D->AddRef();
+    *ppD3D9 = m_D3D;
+  }
+  else
+  {
+    *ppD3D9 = nullptr;
+  }
+
+  return res;
 }
 
 HRESULT __stdcall WrappedD3DDevice9::GetDeviceCaps(D3DCAPS9 *pCaps)
@@ -1077,6 +1094,8 @@ HRESULT __stdcall WrappedD3D9::QueryInterface(REFIID riid, void **ppvObj)
 
     if(SUCCEEDED(hr))
     {
+      AddRef();
+      m_Direct3D->Release();    // transfer the refcount to the wrapper
       *ppvObj = this;
       return S_OK;
     }
@@ -1092,6 +1111,8 @@ HRESULT __stdcall WrappedD3D9::QueryInterface(REFIID riid, void **ppvObj)
 
     if(SUCCEEDED(hr))
     {
+      AddRef();
+      m_Direct3D->Release();    // transfer the refcount to the wrapper
       *ppvObj = this;
       return S_OK;
     }
@@ -1113,19 +1134,20 @@ HRESULT __stdcall WrappedD3D9::QueryInterface(REFIID riid, void **ppvObj)
 ULONG __stdcall WrappedD3D9::AddRef()
 {
   ULONG refCount;
-  refCount = m_Direct3D->AddRef();
-  return refCount - 1;
+  refCount = InterlockedIncrement(&m_InternalRefcount);
+  return refCount;
 }
 
 ULONG __stdcall WrappedD3D9::Release()
 {
-  ULONG refCount = m_Direct3D->Release();
-  if(refCount == 1)
+  ULONG refCount = InterlockedDecrement(&m_InternalRefcount);
+  if(refCount == 0)
   {
+    m_Direct3DEx->Release();
     m_Direct3D->Release();
     delete this;
   }
-  return refCount - 1;
+  return refCount;
 }
 
 HRESULT __stdcall WrappedD3D9::RegisterSoftwareDevice(void *pInitializeFunction)
@@ -1231,7 +1253,7 @@ HRESULT __stdcall WrappedD3D9::CreateDevice(UINT Adapter, D3DDEVTYPE DeviceType,
     if(!wnd)
       RDCWARN("Couldn't find valid non-NULL window at CreateDevice time");
 
-    WrappedD3DDevice9 *wrappedDevice = new WrappedD3DDevice9(device, wnd);
+    WrappedD3DDevice9 *wrappedDevice = new WrappedD3DDevice9(device, this, wnd);
     wrappedDevice->LazyInit();    // TODO this can be moved later probably
     *ppReturnedDeviceInterface = wrappedDevice;
   }
@@ -1239,11 +1261,6 @@ HRESULT __stdcall WrappedD3D9::CreateDevice(UINT Adapter, D3DDEVTYPE DeviceType,
   {
     *ppReturnedDeviceInterface = NULL;
   }
-
-  m_Direct3D->AddRef();
-  ULONG refcountAfter = m_Direct3D->Release();
-
-  RDCASSERT(refcountAfter == 3);
 
   return res;
 }
@@ -1292,7 +1309,7 @@ HRESULT __stdcall WrappedD3D9::CreateDeviceEx(UINT Adapter, D3DDEVTYPE DeviceTyp
     if(!wnd)
       RDCWARN("Couldn't find valid non-NULL window at CreateDevice time");
 
-    WrappedD3DDevice9 *wrappedDevice = new WrappedD3DDevice9(device, wnd);
+    WrappedD3DDevice9 *wrappedDevice = new WrappedD3DDevice9(device, this, wnd);
     wrappedDevice->LazyInit();    // TODO this can be moved later probably
     *ppReturnedDeviceInterface = wrappedDevice;
   }
@@ -1300,11 +1317,6 @@ HRESULT __stdcall WrappedD3D9::CreateDeviceEx(UINT Adapter, D3DDEVTYPE DeviceTyp
   {
     *ppReturnedDeviceInterface = NULL;
   }
-
-  m_Direct3D->AddRef();
-  ULONG refcountAfter = m_Direct3D->Release();
-
-  RDCASSERT(refcountAfter == 4);
 
   return res;
 }

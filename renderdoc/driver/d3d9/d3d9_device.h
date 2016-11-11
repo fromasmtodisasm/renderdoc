@@ -27,11 +27,12 @@
 #include "d3d9_common.h"
 
 class D3D9DebugManager;
+class WrappedD3D9;
 
 class WrappedD3DDevice9 : public IDirect3DDevice9Ex, public IFrameCapturer
 {
 public:
-  WrappedD3DDevice9(IDirect3DDevice9 *device, HWND wnd);
+  WrappedD3DDevice9(IDirect3DDevice9 *device, WrappedD3D9 *wrappedD3D, HWND wnd);
   ~WrappedD3DDevice9();
 
   void LazyInit();
@@ -291,6 +292,8 @@ private:
 
   D3D9DebugManager *m_DebugManager;
 
+  WrappedD3D9 *m_D3D;
+
   HWND m_Wnd;
 
   unsigned int m_InternalRefcount;
@@ -311,14 +314,10 @@ private:
 class WrappedD3D9 : public IDirect3D9Ex
 {
 public:
-  WrappedD3D9(IDirect3D9 *direct3D9) : m_Direct3D(direct3D9), m_Direct3DEx(NULL)
+  WrappedD3D9(IDirect3D9 *direct3D9)
+      : m_Direct3D(direct3D9), m_Direct3DEx(NULL), m_InternalRefcount(1)
   {
     m_Direct3D->QueryInterface(__uuidof(IDirect3D9Ex), (void **)&m_Direct3DEx);
-
-    m_Direct3D->AddRef();
-    ULONG refcountAfter = m_Direct3D->Release();
-
-    RDCASSERT(refcountAfter == 2);
   }
   /*** IUnknown methods ***/
   virtual HRESULT __stdcall QueryInterface(REFIID riid, void **ppvObj);
@@ -372,4 +371,6 @@ public:
 private:
   IDirect3D9 *m_Direct3D;
   IDirect3D9Ex *m_Direct3DEx;
+
+  unsigned int m_InternalRefcount;
 };
