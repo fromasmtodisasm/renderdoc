@@ -2,10 +2,23 @@
 
 #include "serialise/serialiser.h"
 
-WrappedD3DSwapChain9::WrappedD3DSwapChain9(IDirect3DSwapChain9 *swapChain, WrappedD3DDevice9 *device)
-    : m_SwapChain(swapChain), m_Device(device)
+WrappedD3DSwapChain9::WrappedD3DSwapChain9(IDirect3DSwapChain9 *swapChain,
+                                           WrappedD3DDevice9 *device, UINT index, bool implicit)
+    : m_RefCounter(swapChain, false),
+      m_SoftRefCounter(NULL, false),
+	m_Implicit(implicit),
+      m_SwapChain(swapChain),
+      m_Device(device),
+      m_Index(index)
 {
   m_SwapChain->QueryInterface(__uuidof(IDirect3DSwapChain9Ex), (void **)&m_SwapChainEx);
+  m_Device->SoftRef();
+  m_Device->InternalRef();    // swapchains are never set as resources
+  if (m_Implicit)
+  {
+	  m_RefCounter.Release();
+	  RDCASSERT(m_RefCounter.GetRefCount() == 0);
+  }
 }
 
 HRESULT __stdcall WrappedD3DSwapChain9::QueryInterface(REFIID riid, void **ppvObj)
@@ -16,6 +29,8 @@ HRESULT __stdcall WrappedD3DSwapChain9::QueryInterface(REFIID riid, void **ppvOb
 
     if(SUCCEEDED(hr))
     {
+      AddRef();
+      m_SwapChain->Release();
       *ppvObj = this;
       return S_OK;
     }
@@ -31,6 +46,8 @@ HRESULT __stdcall WrappedD3DSwapChain9::QueryInterface(REFIID riid, void **ppvOb
 
     if(SUCCEEDED(hr))
     {
+      AddRef();
+      m_SwapChain->Release();
       *ppvObj = this;
       return S_OK;
     }
@@ -51,21 +68,26 @@ HRESULT __stdcall WrappedD3DSwapChain9::QueryInterface(REFIID riid, void **ppvOb
 
 ULONG __stdcall WrappedD3DSwapChain9::AddRef()
 {
-  return m_SwapChain->AddRef() - 1;
+  m_Device->SoftRef();
+  return m_RefCounter.AddRef();
 }
 
 ULONG __stdcall WrappedD3DSwapChain9::Release()
 {
-  ULONG ref = m_SwapChain->Release();
-  if(ref == 1)
+  m_Device->SoftRelease();
+  ULONG ret = m_RefCounter.Release();
+  if(ret == 0 && !m_Implicit)
   {
-    // noone else is holding this object anymore
-    // we can release our own reference
+    m_Device->RemoveSwapchain(m_Index);
+    m_Device->SoftRelease();
+
+    m_SwapChainEx->Release();
+
     UINT refCount = m_SwapChain->Release();
     RDCASSERT(refCount == 0);
     delete this;
   }
-  return ref - 1;
+  return ret;
 }
 
 HRESULT __stdcall WrappedD3DSwapChain9::Present(CONST RECT *pSourceRect, CONST RECT *pDestRect,
@@ -103,6 +125,9 @@ HRESULT __stdcall WrappedD3DSwapChain9::GetDevice(IDirect3DDevice9 **ppDevice)
   HRESULT res = m_SwapChain->GetDevice(&device);
   if(res == S_OK)
   {
+    // transfer the refcount to the wrapper
+    m_Device->AddRef();
+    device->Release();
     *ppDevice = m_Device;
   }
   return res;

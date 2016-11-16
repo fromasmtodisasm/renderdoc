@@ -28,6 +28,7 @@
 
 class D3D9DebugManager;
 class WrappedD3D9;
+class WrappedD3DSwapChain9;
 
 class WrappedD3DDevice9 : public IDirect3DDevice9Ex, public IFrameCapturer
 {
@@ -52,6 +53,10 @@ public:
   }
 
   D3D9DebugManager *GetDebugManager() { return m_DebugManager; }
+
+  void RemoveSwapchain(UINT index);
+
+
   /*** IUnknown methods ***/
   ULONG STDMETHODCALLTYPE AddRef() { return m_RefCounter.AddRef(); }
   ULONG STDMETHODCALLTYPE Release()
@@ -293,6 +298,8 @@ private:
   D3D9DebugManager *m_DebugManager;
 
   WrappedD3D9 *m_D3D;
+  WrappedD3DSwapChain9** m_SwapChains;
+  UINT m_NumImplicitSwapChains;
 
   HWND m_Wnd;
 

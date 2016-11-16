@@ -29,7 +29,7 @@
 class WrappedD3DSwapChain9 : public IDirect3DSwapChain9Ex
 {
 public:
-  WrappedD3DSwapChain9(IDirect3DSwapChain9 *swapChain, WrappedD3DDevice9 *device);
+  WrappedD3DSwapChain9(IDirect3DSwapChain9 *swapChain, WrappedD3DDevice9 *device, UINT index, bool implicit);
 
   /*** IUnknown methods ***/
   virtual HRESULT __stdcall QueryInterface(REFIID riid, void **ppvObj);
@@ -54,7 +54,13 @@ public:
   virtual HRESULT __stdcall GetDisplayModeEx(D3DDISPLAYMODEEX *pMode, D3DDISPLAYROTATION *pRotation);
 
 private:
+	RefCounter9 m_RefCounter;
+	RefCounter9 m_SoftRefCounter;
+
+	bool m_Implicit;
+
   IDirect3DSwapChain9 *m_SwapChain;
   IDirect3DSwapChain9Ex *m_SwapChainEx;
   WrappedD3DDevice9 *m_Device;
+  UINT m_Index;
 };
