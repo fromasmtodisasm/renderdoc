@@ -28,27 +28,21 @@
 #include "d3d9_debug.h"
 #include "d3d9_swapchain.h"
 
-#define NUM_SWAPCHAINS_SUPPORTED 4
-
 WrappedD3DDevice9::WrappedD3DDevice9(IDirect3DDevice9 *device, WrappedD3D9 *wrappedD3D, HWND wnd)
     : m_Device(device),
       m_DeviceEx(NULL),
-      m_RefCounter(device, false),
-      m_SoftRefCounter(NULL, false),
+      m_InternalRefcount(0),
+      m_RefCounter(1),
+      m_SoftRefCounter(0),
+      m_Alive(true),
+      m_FrameCounter(0),
       m_DebugManager(NULL),
       m_D3D(wrappedD3D),
-	m_NumImplicitSwapChains(device->GetNumberOfSwapChains())
+      m_SwapChains(device->GetNumberOfSwapChains()),
+      m_NumImplicitSwapChains(device->GetNumberOfSwapChains())
 {
   m_D3D->AddRef();
   m_Device->QueryInterface(__uuidof(IDirect3DDevice9Ex), (void **)&m_DeviceEx);
-
-  m_FrameCounter = 0;
-
-  // refcounters implicitly construct with one reference, but we don't start with any soft
-  // references.
-  m_SoftRefCounter.Release();
-  m_InternalRefcount = 0;
-  m_Alive = true;
 
   if(RenderDoc::Inst().IsReplayApp())
   {
@@ -66,19 +60,15 @@ WrappedD3DDevice9::WrappedD3DDevice9(IDirect3DDevice9 *device, WrappedD3D9 *wrap
       RenderDoc::Inst().AddFrameCapturer((IDirect3DDevice9 *)this, wnd, this);
   }
 
-  D3DCAPS9 caps;
-  m_Device->GetDeviceCaps(&caps);
-
-  // TODO most of the time only one will be used but potentially unlimited
-  m_SwapChains = new WrappedD3DSwapChain9*[/*caps.NumberOfAdaptersInGroup*/NUM_SWAPCHAINS_SUPPORTED];
-  memset(m_SwapChains, 0, NUM_SWAPCHAINS_SUPPORTED * sizeof(WrappedD3DSwapChain9*));
-
-  //the first swapchain is special it's always created at device creation
-  IDirect3DSwapChain9* swapChain0 = nullptr;
-  m_Device->GetSwapChain(0, &swapChain0);
-  RDCASSERT(swapChain0 != nullptr);
-  WrappedD3DSwapChain9 *wrappedSwapchain = new WrappedD3DSwapChain9(swapChain0, this, 0, true);
-  m_SwapChains[0] = wrappedSwapchain;
+  // implicit swapchains are special they are always created at device creation
+  for(UINT i = 0; i < m_NumImplicitSwapChains; ++i)
+  {
+    IDirect3DSwapChain9 *swapChain = nullptr;
+    m_Device->GetSwapChain(i, &swapChain);
+    RDCASSERT(swapChain != nullptr);
+    WrappedD3DSwapChain9 *wrappedSwapchain = new WrappedD3DSwapChain9(swapChain, this, i, true);
+    m_SwapChains[i] = wrappedSwapchain;
+  }
 }
 
 void WrappedD3DDevice9::CheckForDeath()
@@ -100,6 +90,11 @@ void WrappedD3DDevice9::CheckForDeath()
 
 WrappedD3DDevice9::~WrappedD3DDevice9()
 {
+  for(UINT i = 0; i < m_NumImplicitSwapChains; ++i)
+  {
+    m_SwapChains[i]->Release();
+  }
+
   RenderDoc::Inst().RemoveDeviceFrameCapturer((IDirect3DDevice9 *)this);
 
   if(m_Wnd != NULL)
@@ -193,8 +188,8 @@ void WrappedD3DDevice9::RenderOverlay(HWND hDestWindowOverride)
 
 void WrappedD3DDevice9::RemoveSwapchain(UINT index)
 {
-	InternalRelease();
-	m_SwapChains[index] = NULL;
+  InternalRelease();
+  m_SwapChains[index] = NULL;
 }
 
 HRESULT WrappedD3DDevice9::QueryInterface(REFIID riid, void **ppvObject)
@@ -343,12 +338,16 @@ HRESULT __stdcall WrappedD3DDevice9::CreateAdditionalSwapChain(
   IDirect3DSwapChain9 *swapChain;
   HRESULT res = m_Device->CreateAdditionalSwapChain(pPresentationParameters, &swapChain);
 
+  // TODO check if D3D is reusing indices after additional swapchains are released
+
   if(res == S_OK)
   {
-	  UINT index = m_Device->GetNumberOfSwapChains();
-    WrappedD3DSwapChain9 *wrappedSwapchain = new WrappedD3DSwapChain9(swapChain, this, index, false);
+    UINT swapChainCount = m_Device->GetNumberOfSwapChains();
+    RDCASSERT(swapChainCount == m_SwapChains.size());
+    WrappedD3DSwapChain9 *wrappedSwapchain =
+        new WrappedD3DSwapChain9(swapChain, this, swapChainCount, false);
     *pSwapChain = wrappedSwapchain;
-	m_SwapChains[index] = wrappedSwapchain;
+    m_SwapChains.push_back(wrappedSwapchain);
   }
 
   return res;
@@ -356,20 +355,19 @@ HRESULT __stdcall WrappedD3DDevice9::CreateAdditionalSwapChain(
 
 HRESULT __stdcall WrappedD3DDevice9::GetSwapChain(UINT iSwapChain, IDirect3DSwapChain9 **pSwapChain)
 {
-	RDCASSERT(iSwapChain < NUM_SWAPCHAINS_SUPPORTED);
+  RDCASSERT(iSwapChain < m_SwapChains.size());
 
-	if (iSwapChain >= NUM_SWAPCHAINS_SUPPORTED)
-	{
-		return m_Device->GetSwapChain(iSwapChain, pSwapChain);
-	}
+  // in case of an error still try to not crash
+  if(iSwapChain >= m_SwapChains.size())
+  {
+    return m_Device->GetSwapChain(iSwapChain, pSwapChain);
+  }
 
-	// TODO maybe we need a mutex here
+  RDCASSERT(m_SwapChains[iSwapChain] != NULL);
 
-	RDCASSERT(m_SwapChains[iSwapChain] != NULL);
-
-	m_SwapChains[iSwapChain]->AddRef();
-	*pSwapChain = m_SwapChains[iSwapChain];
-	return S_OK;
+  m_SwapChains[iSwapChain]->AddRef();
+  *pSwapChain = m_SwapChains[iSwapChain];
+  return S_OK;
 }
 
 UINT __stdcall WrappedD3DDevice9::GetNumberOfSwapChains()

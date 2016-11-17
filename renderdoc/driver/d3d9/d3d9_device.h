@@ -53,9 +53,7 @@ public:
   }
 
   D3D9DebugManager *GetDebugManager() { return m_DebugManager; }
-
   void RemoveSwapchain(UINT index);
-
 
   /*** IUnknown methods ***/
   ULONG STDMETHODCALLTYPE AddRef() { return m_RefCounter.AddRef(); }
@@ -298,7 +296,7 @@ private:
   D3D9DebugManager *m_DebugManager;
 
   WrappedD3D9 *m_D3D;
-  WrappedD3DSwapChain9** m_SwapChains;
+  std::vector<WrappedD3DSwapChain9 *> m_SwapChains;
   UINT m_NumImplicitSwapChains;
 
   HWND m_Wnd;

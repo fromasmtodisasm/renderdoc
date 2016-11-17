@@ -4,9 +4,9 @@
 
 WrappedD3DSwapChain9::WrappedD3DSwapChain9(IDirect3DSwapChain9 *swapChain,
                                            WrappedD3DDevice9 *device, UINT index, bool implicit)
-    : m_RefCounter(swapChain, false),
-      m_SoftRefCounter(NULL, false),
-	m_Implicit(implicit),
+    : m_RefCounter(1),
+      m_SoftRefCounter(0),
+      m_Implicit(implicit),
       m_SwapChain(swapChain),
       m_Device(device),
       m_Index(index)
@@ -14,11 +14,6 @@ WrappedD3DSwapChain9::WrappedD3DSwapChain9(IDirect3DSwapChain9 *swapChain,
   m_SwapChain->QueryInterface(__uuidof(IDirect3DSwapChain9Ex), (void **)&m_SwapChainEx);
   m_Device->SoftRef();
   m_Device->InternalRef();    // swapchains are never set as resources
-  if (m_Implicit)
-  {
-	  m_RefCounter.Release();
-	  RDCASSERT(m_RefCounter.GetRefCount() == 0);
-  }
 }
 
 HRESULT __stdcall WrappedD3DSwapChain9::QueryInterface(REFIID riid, void **ppvObj)
@@ -68,15 +63,14 @@ HRESULT __stdcall WrappedD3DSwapChain9::QueryInterface(REFIID riid, void **ppvOb
 
 ULONG __stdcall WrappedD3DSwapChain9::AddRef()
 {
-  m_Device->SoftRef();
-  return m_RefCounter.AddRef();
+  unsigned int ref = m_RefCounter.SoftRef(m_Device);
+  return m_Implicit ? ref - 1 : ref;
 }
 
 ULONG __stdcall WrappedD3DSwapChain9::Release()
 {
-  m_Device->SoftRelease();
-  ULONG ret = m_RefCounter.Release();
-  if(ret == 0 && !m_Implicit)
+  ULONG ref = m_RefCounter.SoftRelease(m_Device);
+  if(ref == 0)
   {
     m_Device->RemoveSwapchain(m_Index);
     m_Device->SoftRelease();
@@ -87,7 +81,7 @@ ULONG __stdcall WrappedD3DSwapChain9::Release()
     RDCASSERT(refCount == 0);
     delete this;
   }
-  return ret;
+  return m_Implicit ? ref - 1 : ref;
 }
 
 HRESULT __stdcall WrappedD3DSwapChain9::Present(CONST RECT *pSourceRect, CONST RECT *pDestRect,
