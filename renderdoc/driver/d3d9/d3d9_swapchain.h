@@ -32,6 +32,8 @@ public:
   WrappedD3DSwapChain9(IDirect3DSwapChain9 *swapChain, WrappedD3DDevice9 *device, UINT index,
                        bool implicit);
 
+  ULONG SoftRef() { return m_SoftRefCounter.AddRef(); }
+  ULONG SoftRelease() { return m_SoftRefCounter.Release(); }
   /*** IUnknown methods ***/
   virtual HRESULT __stdcall QueryInterface(REFIID riid, void **ppvObj);
   virtual ULONG __stdcall AddRef();
@@ -64,4 +66,6 @@ private:
   IDirect3DSwapChain9Ex *m_SwapChainEx;
   WrappedD3DDevice9 *m_Device;
   UINT m_Index;
+
+  std::vector<WrappedD3DSurface9*> m_BackBuffers;
 };

@@ -100,7 +100,14 @@ HRESULT __stdcall WrappedD3DSwapChain9::GetFrontBufferData(IDirect3DSurface9 *pD
 HRESULT __stdcall WrappedD3DSwapChain9::GetBackBuffer(UINT iBackBuffer, D3DBACKBUFFER_TYPE Type,
                                                       IDirect3DSurface9 **ppBackBuffer)
 {
-  return m_SwapChain->GetBackBuffer(iBackBuffer, Type, ppBackBuffer);
+	IDirect3DSurface9* surface;
+	HRESULT res = m_SwapChain->GetBackBuffer(iBackBuffer, Type, ppBackBuffer);
+	if(res == S_OK)
+	{
+
+	}
+
+	return res;
 }
 
 HRESULT __stdcall WrappedD3DSwapChain9::GetRasterStatus(D3DRASTER_STATUS *pRasterStatus)

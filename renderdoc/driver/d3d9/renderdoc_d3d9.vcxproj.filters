@@ -16,6 +16,9 @@
     <Filter Include="Replay">
       <UniqueIdentifier>{03d937fd-e33a-4b97-aa7e-5f2990163c9b}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Resources">
+      <UniqueIdentifier>{6434fd9d-f5c4-46df-b5f2-7cd37d39f2f5}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="d3d9_hooks.cpp">
@@ -35,6 +38,9 @@
     </ClCompile>
     <ClCompile Include="d3d9_swapchain.cpp">
       <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="d3d9_surface.cpp">
+      <Filter>Resources</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -64,6 +70,9 @@
     </ClInclude>
     <ClInclude Include="d3d9_swapchain.h">
       <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="d3d9_surface.h">
+      <Filter>Resources</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
